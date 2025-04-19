@@ -82,6 +82,21 @@ svg {
     stroke-width: 1.5px;
 }
 
+/* Style for the dynamic call relationship links */
+.call-link {
+    fill: none;
+    stroke: #e74c3c; /* Red color for visibility */
+    stroke-width: 2px;
+    stroke-dasharray: 4, 2; /* Dashed line */
+    opacity: 0.8;
+}
+
+/* Style for the arrowhead marker */
+.arrowhead {
+    fill: #e74c3c; /* Match link color */
+}
+
+
 /* Code Display Drawer */
 #code-display {
     position: fixed;
@@ -140,4 +155,10 @@ svg {
     border-radius: 4px;
     margin-top: 15px;
     text-align: center;
+}
+
+.error-message { /* Style for error messages within the SVG */
+    fill: #e74c3c;
+    font-size: 14px;
+    font-weight: bold;
 }

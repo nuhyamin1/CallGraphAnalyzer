@@ -32,77 +32,152 @@
         const svg = d3.select("svg");
         const width = +svg.attr("width");
         const height = +svg.attr("height");
-        const g = svg.append("g").attr("transform", "translate(40,0)"); // Adjust margin for labels
+        const g = svg.append("g").attr("transform", "translate(40,0)"); // Main group for tree
+        const linkGroup = g.append("g"); // Group for standard tree links
+        const callLinkGroup = g.append("g"); // Group for dynamic call links (DRAW FIRST)
+        const nodeGroup = g.append("g"); // Group for nodes (DRAW ON TOP of call links)
 
-        if (codeStructure && codeStructure.children && codeStructure.children.length > 0) {
+        // Map to store nodes by their unique ID for quick lookup
+        const nodesById = new Map();
+
+        if (codeStructure && codeStructure.children && codeStructure.children.length > 0 && !codeStructure.error) {
             const treeLayout = d3.tree().size([height, width - 160]); // Adjust width for labels
 
-            const root = d3.hierarchy(codeStructure);
+            const root = d3.hierarchy(codeStructure, d => d.children); // Ensure children accessor is correct
             treeLayout(root);
 
-            // Links
-            g.selectAll(".link")
-                .data(root.links())
+            // Populate the nodesById map
+            root.descendants().forEach(node => {
+                if (node.data.id) { // Only map nodes with an ID
+                    nodesById.set(node.data.id, node);
+                }
+            });
+
+            // Standard Tree Links
+            linkGroup.selectAll(".link")
+                .data(root.links()) // Use root.links() for standard parent-child links
                 .enter().append("path")
                 .attr("class", "link")
                 .attr("d", d3.linkHorizontal()
-                    .x(d => d.y)
+                    .x(d => d.y) // source/target are properties of link objects
                     .y(d => d.x));
 
             // Nodes
-            const node = g.selectAll(".node")
-                .data(root.descendants())
+            const node = nodeGroup.selectAll(".node")
+                .data(root.descendants()) // Use root.descendants() for nodes
                 .enter().append("g")
                 .attr("class", d => "node" + (d.children ? " node--internal" : " node--leaf"))
-                .attr("transform", d => `translate(${d.y},${d.x})`);
+                .attr("transform", d => `translate(${d.y},${d.x})`)
+                .attr("id", d => `node-${d.data.id}`); // Assign ID to the node group
 
             node.append("circle")
                 .attr("r", 10)
-                .style("cursor", d => d.data.code ? "pointer" : "default"); // Add cursor pointer if code exists
+                // Add cursor pointer if it's a function/method that could be called or call others
+                .style("cursor", d => (d.data.type === 'function' || d.data.type === 'method') ? "pointer" : (d.data.code ? "pointer" : "default"));
 
             node.append("text")
                 .attr("dy", ".35em")
-                .attr("x", d => d.children ? -13 : 13)
+                .attr("x", d => d.children ? -13 : 13) // Position text relative to circle
                 .style("text-anchor", d => d.children ? "end" : "start")
-                .text(d => `${d.data.name} (${d.data.type || 'module'})`);
+                .text(d => `${d.data.name} (${d.data.type || 'module'})`); // Display name and type
 
             const codeDisplay = d3.select("#code-display");
             const codeContent = d3.select("#code-content");
 
+            // Function to draw call links
+            function drawCallLinks(clickedNodeData) {
+                callLinkGroup.selectAll("*").remove(); // Clear previous call links
+
+                if (clickedNodeData.called_by && clickedNodeData.called_by.length > 0) {
+                    const targetNode = nodesById.get(clickedNodeData.id);
+                    if (!targetNode) return;
+
+                    // Define a simple line generator (straight lines)
+                    const lineGenerator = d3.line()
+                        .x(d => d.y) // Horizontal position from node's y
+                        .y(d => d.x); // Vertical position from node's x
+                        // No .curve() for now
+
+                    clickedNodeData.called_by.forEach(callerId => {
+                        const sourceNode = nodesById.get(callerId);
+                        if (sourceNode) {
+                            try {
+                                // Create points array: [sourceNode, targetNode]
+                                const points = [sourceNode, targetNode];
+
+                                // Generate path data using the simple line generator
+                                const pathData = lineGenerator(points);
+                                console.log("Generated pathData:", pathData); // Log the generated path string
+
+                                if (!pathData || pathData.includes("NaN")) {
+                                    console.error("Invalid path data generated:", pathData, "Points:", points);
+                                    return; // Skip if path is invalid
+                                }
+
+                                // Append the path (NO MARKER for now)
+                                callLinkGroup.append("path")
+                                    .attr("class", "call-link")
+                                    .attr("d", pathData);
+                                    // .attr("marker-end", "url(#arrow)"); // Temporarily removed
+                            } catch (error) {
+                                console.error("Error generating or appending path:", error, "Source:", sourceNode, "Target:", targetNode);
+                            }
+                        } else {
+                            console.warn(`Caller node with ID ${callerId} not found in map.`);
+                        }
+                    });
+                }
+            }
+
+             // Define arrowhead marker
+             svg.append("defs").append("marker")
+                .attr("id", "arrow")
+                .attr("viewBox", "0 -5 10 10")
+                .attr("refX", 15) // Controls the distance of the arrowhead from the line end
+                .attr("refY", 0)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("orient", "auto")
+                .append("path")
+                .attr("d", "M0,-5L10,0L0,5")
+                .attr("class", "arrowhead");
+
+
             // Add click listener to nodes
             node.on("click", function(event, d) {
-                event.stopPropagation(); // Prevent click from bubbling up to the body
-                // Remove selected class from all circles
-                g.selectAll(".node circle").classed("selected", false);
+                event.stopPropagation(); // Prevent click from bubbling up
+
+                // --- Selection and Code Display ---
+                nodeGroup.selectAll(".node circle").classed("selected", false); // Deselect all
+                callLinkGroup.selectAll("*").remove(); // Clear previous call links
 
                 if (d.data.code) {
-                    // Add selected class to the clicked circle
-                    d3.select(this).select("circle").classed("selected", true);
+                    d3.select(this).select("circle").classed("selected", true); // Select clicked
                     codeContent.text(d.data.code);
-                    codeDisplay.classed("visible", true); // Show the drawer
-
+                    codeDisplay.classed("visible", true); // Show drawer
                 } else {
-                    // If node has no code, hide the drawer
-                    codeDisplay.classed("visible", false);
-                    if (d.data.type !== 'root') {
-                        // Optionally, show a message briefly or handle differently
-                        console.log(`No specific code snippet available for ${d.data.name} (${d.data.type}).`);
-                    }
+                    codeDisplay.classed("visible", false); // Hide drawer if no code
+                }
+
+                // --- Draw Call Links ---
+                if (d.data.type === 'function' || d.data.type === 'method') {
+                    drawCallLinks(d.data);
                 }
             });
 
-            // Add click listener to the body to hide the drawer when clicking outside
+            // Add click listener to the body to hide drawer and clear links
             d3.select("body").on("click", function() {
                 codeDisplay.classed("visible", false);
-                g.selectAll(".node circle").classed("selected", false); // Deselect nodes
+                nodeGroup.selectAll(".node circle").classed("selected", false); // Deselect nodes
+                callLinkGroup.selectAll("*").remove(); // Clear call links
             });
 
-            // Prevent clicks inside the code display from closing it
+            // Prevent clicks inside the code display from closing it and clearing links
             codeDisplay.on("click", function(event) {
-                event.stopPropagation();
+                event.stopPropagation(); // Keep drawer open when clicking inside
             });
 
-            // --- Drawer Resizing Logic ---
+            // --- Drawer Resizing Logic --- (Keep existing logic)
             const drawer = document.getElementById('code-display');
             const handle = document.getElementById('resize-handle');
             let isResizing = false;
@@ -132,12 +207,19 @@
                 }
             });
             // --- End Drawer Resizing Logic ---
-        } else if (!{{ error | tojson }}) {
+        } else if (codeStructure && codeStructure.error) {
              g.append("text")
               .attr("x", width / 2)
               .attr("y", height / 2)
               .attr("text-anchor", "middle")
-              .text("Upload a Python file to see its structure.");
+              .attr("class", "error-message") // Style error message
+              .text(`Error during analysis: ${codeStructure.error}. Please check the console or file.`);
+        } else if (!{{ error | tojson }}) { // Handle case where no file was uploaded yet
+             g.append("text")
+              .attr("x", width / 2)
+              .attr("y", height / 2)
+              .attr("text-anchor", "middle")
+              .text("Upload a Python file (.py) to see its structure.");
         }
 
     </script>
