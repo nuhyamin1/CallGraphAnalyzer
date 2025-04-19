@@ -100,11 +100,13 @@
                         .curve(d3.curveBumpX); // Apply the curve
 
                     clickedNodeData.called_by.forEach(callerId => { // Iterate through IDs in the 'called_by' list
-                        const sourceNode = nodesById.get(callerId); // This is the CALLER
-                        if (sourceNode) {
+                        const callerNode = nodesById.get(callerId); // Node that calls the clicked one
+                        const clickedAsSourceNode = targetNode; // The clicked node is the source of the arrow
+
+                        if (callerNode) {
                             try {
-                                // Create points array: [caller, callee (clicked)]
-                                const points = [sourceNode, targetNode];
+                                // Create points array: [clicked_node (source), caller (target)]
+                                const points = [clickedAsSourceNode, callerNode];
 
                                 // Generate path data using the curved line generator
                                 const pathData = lineGenerator(points);
@@ -113,13 +115,13 @@
                                     return; // Skip if path is invalid
                                 }
 
-                                // Append the path WITH marker pointing towards the clicked node (target)
+                                // Append the path WITH marker pointing towards the CALLER node (target)
                                 callLinkGroup.append("path")
                                     .attr("class", "call-link")
                                     .attr("d", pathData)
                                     .attr("marker-end", "url(#arrow)");
                             } catch (error) {
-                                console.error("Error generating or appending path:", error, "Source:", sourceNode, "Target:", targetNode);
+                                console.error("Error generating or appending path:", error, "Source:", clickedAsSourceNode, "Target:", callerNode);
                             }
                         } else {
                             console.warn(`Caller node with ID ${callerId} not found in map.`);
