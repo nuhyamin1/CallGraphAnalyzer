@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Breaker - Force Graph</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-python.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         /* Additional styles specific to force graph if needed */
@@ -46,6 +49,9 @@
     <svg width="960" height="600"></svg> {# Increased height slightly #}
 
     <div id="code-display">
+        <div id="code-header">
+            <button id="close-drawer">Close</button>
+        </div>
         <div id="code-content">Click on a node (class or function) to see its code here.</div>
         <div id="resize-handle"></div>
     </div>
@@ -228,34 +234,31 @@
                 }
             }
 
-            // Node click listener
             node.on("click", function(event, d) {
-                event.stopPropagation(); // Prevent body click
+                event.stopPropagation();
+                node.classed("highlighted", false);
+                callLinkGroup.selectAll("*").remove();
+                d3.select(this).classed("highlighted", true);
 
-                // --- Selection and Code Display ---
-                node.classed("highlighted", false); // Remove highlight from all nodes
-                callLinkGroup.selectAll("*").remove(); // Clear previous call links
-
-                d3.select(this).classed("highlighted", true); // Add highlight to clicked node
-
-                if (d.code) { // Use the node data bound by D3 (d, not d.data)
-                    codeContent.text(d.code);
-                    codeDisplay.classed("visible", true); // Show drawer
+                if (d.code) {
+                    codeContent.selectAll("*").remove(); // Clear previous content
+                    const pre = codeContent.append("pre");
+                    const code = pre.append("code").classed("language-python", true).text(d.code);
+                    Prism.highlightElement(code.node());
+                    codeDisplay.classed("visible", true);
                 } else {
-                    codeDisplay.classed("visible", false); // Hide drawer if no code
+                    codeDisplay.classed("visible", false);
                 }
 
-                // --- Draw Call Links ---
                 if (d.type === 'function' || d.type === 'method') {
-                    drawCallLinks(d); // Pass the simulation node data (d)
+                    drawCallLinks(d);
                 }
             });
 
-            // Body click listener
-            d3.select("body").on("click", function() {
+            d3.select("#close-drawer").on("click", function() {
                 codeDisplay.classed("visible", false);
-                node.classed("highlighted", false); // Remove highlight from all nodes
-                callLinkGroup.selectAll("*").remove(); // Clear call links
+                node.classed("highlighted", false);
+                callLinkGroup.selectAll("*").remove();
             });
 
             // Prevent clicks inside the code display from closing it

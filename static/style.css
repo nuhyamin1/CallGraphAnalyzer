@@ -3,18 +3,11 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
     margin: 0;
     padding: 20px;
-    background-color: #f4f7f6;
+    background: linear-gradient(to bottom, #f4f7f6, #e0e7ef);
     color: #333;
     line-height: 1.6;
 }
 
-h1 {
-    color: #2c3e50;
-    text-align: center;
-    margin-bottom: 30px;
-}
-
-/* Form Styling */
 form {
     background-color: #ffffff;
     padding: 20px;
@@ -24,8 +17,27 @@ form {
     gap: 10px;
     align-items: center;
     justify-content: center;
+    margin-bottom: 40px; /* Increased spacing */
+}
+
+h1 {
+    color: #2c3e50;
+    text-align: center;
     margin-bottom: 30px;
 }
+
+/* Form Styling */
+/* form {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 30px;
+} */
 
 input[type="file"] {
     border: 1px solid #ccc;
@@ -57,35 +69,39 @@ svg {
 }
 
 .node circle {
-    fill: #fff;
-    stroke: #3498db;
-    stroke-width: 2px;
+    stroke-width: 1.5px;
+    cursor: grab;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1)); /* Subtle shadow */
+    transition: all 0.2s ease;
 }
 
-/* Highlighted Node Style */
+.node circle:hover {
+    transform: scale(1.1); /* Slight enlargement on hover */
+}
+
 .node.highlighted circle {
-    stroke: #f39c12; /* Orange stroke */
-    stroke-width: 3px;
-}
-
-.node circle.selected {
-    fill: #f1c40f; /* Example highlight color */
     stroke: #f39c12;
-}
-
-.node text {
-    font: 12px sans-serif;
-    fill: #555;
-}
-
-.node--internal text {
-    text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+    stroke-width: 3px;
+    filter: drop-shadow(0 0 5px #f39c12); /* Glow effect */
 }
 
 .link {
-    fill: none;
-    stroke: #ccc;
-    stroke-width: 1.5px;
+    stroke: #bdc3c7; /* Softer gray */
+    stroke-width: 2px;
+    stroke-linecap: round; /* Smoother ends */
+    stroke-opacity: 0.6;
+}
+
+.call-link {
+    stroke: #e74c3c;
+    stroke-width: 2px;
+    stroke-dasharray: 4, 2;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+.call-link:hover {
+    opacity: 1; /* Full visibility on hover */
 }
 
 /* Style for the dynamic call relationship links */
@@ -115,14 +131,57 @@ svg {
     background-color: #2c3e50;
     color: #ecf0f1;
     border-right: 1px solid #34495e;
-    font-family: "Courier New", Courier, monospace;
+    font-family: "Consolas", "Courier New", monospace;
     box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
     transition: left 0.3s ease-in-out;
     z-index: 1000;
     display: flex;
-    flex-direction: row;
-    overflow: visible;
-    padding: 0;
+    flex-direction: column; /* Changed for header */
+    overflow: hidden;
+}
+
+#code-header {
+    padding: 10px;
+    background-color: #34495e;
+    border-bottom: 1px solid #2c3e50;
+}
+
+#close-drawer {
+    background-color: #e74c3c;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+#close-drawer:hover {
+    background-color: #c0392b;
+}
+
+#code-content {
+    flex: 1;
+    padding: 20px;
+    overflow-x: auto;
+    overflow-y: auto;
+}
+
+#resize-handle {
+    width: 7px;
+    background: repeating-linear-gradient(
+        90deg,
+        #34495e,
+        #34495e 2px,
+        #7f8c8d 2px,
+        #7f8c8d 4px
+    ); /* Grip texture */
+    cursor: ew-resize;
+    height: 100%;
+}
+
+#code-display.visible {
+    left: 0;
 }
 
 #code-content {
