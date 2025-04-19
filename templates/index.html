@@ -84,41 +84,40 @@
             const codeDisplay = d3.select("#code-display");
             const codeContent = d3.select("#code-content");
 
-            // Function to draw call links
+            // Function to draw call links (showing functions THAT CALL the clicked node)
             function drawCallLinks(clickedNodeData) {
                 callLinkGroup.selectAll("*").remove(); // Clear previous call links
 
+                // Iterate through the functions THAT CALL the clicked node
                 if (clickedNodeData.called_by && clickedNodeData.called_by.length > 0) {
-                    const targetNode = nodesById.get(clickedNodeData.id);
+                    const targetNode = nodesById.get(clickedNodeData.id); // The clicked node is the target
                     if (!targetNode) return;
 
-                    // Define a simple line generator (straight lines)
+                    // Define line generator with curve
                     const lineGenerator = d3.line()
                         .x(d => d.y) // Horizontal position from node's y
-                        .y(d => d.x); // Vertical position from node's x
-                        // No .curve() for now
+                        .y(d => d.x) // Vertical position from node's x
+                        .curve(d3.curveBumpX); // Apply the curve
 
-                    clickedNodeData.called_by.forEach(callerId => {
-                        const sourceNode = nodesById.get(callerId);
+                    clickedNodeData.called_by.forEach(callerId => { // Iterate through IDs in the 'called_by' list
+                        const sourceNode = nodesById.get(callerId); // This is the CALLER
                         if (sourceNode) {
                             try {
-                                // Create points array: [sourceNode, targetNode]
+                                // Create points array: [caller, callee (clicked)]
                                 const points = [sourceNode, targetNode];
 
-                                // Generate path data using the simple line generator
+                                // Generate path data using the curved line generator
                                 const pathData = lineGenerator(points);
-                                console.log("Generated pathData:", pathData); // Log the generated path string
-
                                 if (!pathData || pathData.includes("NaN")) {
                                     console.error("Invalid path data generated:", pathData, "Points:", points);
                                     return; // Skip if path is invalid
                                 }
 
-                                // Append the path (NO MARKER for now)
+                                // Append the path WITH marker pointing towards the clicked node (target)
                                 callLinkGroup.append("path")
                                     .attr("class", "call-link")
-                                    .attr("d", pathData);
-                                    // .attr("marker-end", "url(#arrow)"); // Temporarily removed
+                                    .attr("d", pathData)
+                                    .attr("marker-end", "url(#arrow)");
                             } catch (error) {
                                 console.error("Error generating or appending path:", error, "Source:", sourceNode, "Target:", targetNode);
                             }
