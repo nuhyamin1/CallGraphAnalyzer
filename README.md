@@ -20,8 +20,11 @@ This simple web application helps you visualize the structure of your Python cod
 To get this running on your local machine, follow these steps:
 
 1.  **Prerequisites:** Make sure you have Python 3.x and pip installed.
-2.  **Get the Code:** Clone this repository or download the source files (`app.py` and the `templates` folder).
-3.  **Navigate to Directory:** Open your terminal or command prompt and change to the project directory where `app.py` is located.
+2.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/nuhyamin1/CallGraphAnalyzer.git
+    ```
+3.  **Navigate to Directory:** Open your terminal or command prompt and change into the newly cloned `CallGraphAnalyzer` directory.
 4.  **Virtual Environment (Recommended):**
     ```bash
     python -m venv venv
