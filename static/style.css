@@ -93,8 +93,9 @@ svg {
     background-color: #2c3e50; /* Dark background */
     color: #ecf0f1; /* Light text */
     border-right: 1px solid #34495e; /* Border on the visible edge */
-    white-space: pre-wrap; /* Preserve whitespace and wrap lines */
+    white-space: pre; /* Preserve whitespace, no wrap */
     font-family: "Courier New", Courier, monospace;
+    overflow-x: auto; /* Enable horizontal scroll */
     overflow-y: auto;
     box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2); /* Shadow for depth */
     transition: left 0.3s ease-in-out; /* Smooth sliding animation */
