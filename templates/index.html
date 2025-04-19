@@ -65,21 +65,38 @@
                 .style("text-anchor", d => d.children ? "end" : "start")
                 .text(d => `${d.data.name} (${d.data.type || 'module'})`);
 
+            const codeDisplay = d3.select("#code-display");
+
             // Add click listener to nodes
             node.on("click", function(event, d) {
+                event.stopPropagation(); // Prevent click from bubbling up to the body
                 // Remove selected class from all circles
                 g.selectAll(".node circle").classed("selected", false);
-                // Add selected class to the clicked circle
-                d3.select(this).select("circle").classed("selected", true);
 
-                const codeDisplay = d3.select("#code-display");
                 if (d.data.code) {
+                    // Add selected class to the clicked circle
+                    d3.select(this).select("circle").classed("selected", true);
                     codeDisplay.text(d.data.code);
-                } else if (d.data.type !== 'root') { // Don't clear for root if it has no code
-                    codeDisplay.text(`No specific code snippet available for ${d.data.name} (${d.data.type}).`);
+                    codeDisplay.classed("visible", true); // Show the drawer
                 } else {
-                     codeDisplay.text('Click on a class or function node to see its code.');
+                    // If node has no code, hide the drawer
+                    codeDisplay.classed("visible", false);
+                    if (d.data.type !== 'root') {
+                        // Optionally, show a message briefly or handle differently
+                        console.log(`No specific code snippet available for ${d.data.name} (${d.data.type}).`);
+                    }
                 }
+            });
+
+            // Add click listener to the body to hide the drawer when clicking outside
+            d3.select("body").on("click", function() {
+                codeDisplay.classed("visible", false);
+                g.selectAll(".node circle").classed("selected", false); // Deselect nodes
+            });
+
+            // Prevent clicks inside the code display from closing it
+            codeDisplay.on("click", function(event) {
+                event.stopPropagation();
             });
         } else if (!{{ error | tojson }}) {
              g.append("text")
