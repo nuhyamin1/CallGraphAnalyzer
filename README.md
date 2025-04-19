@@ -12,6 +12,7 @@ This simple web application helps you visualize the structure of your Python cod
 *   **File Upload:** Accepts Python (`.py`) files.
 *   **Structure Visualization:** Displays a hierarchical tree view of classes, methods, and top-level functions using D3.js.
 *   **Code Snippet Display:** Click on a class or function node in the tree to view its source code directly on the page.
+*   **Call Link Visualization:** Clicking on a function or method node also displays arrows pointing *from* the clicked node *to* the functions/methods that call it.
 *   **Simple Web Interface:** Built with Flask for the backend and basic HTML/CSS/JavaScript for the frontend.
 
 ## Setup
@@ -50,4 +51,4 @@ To get this running on your local machine, follow these steps:
 3.  Click the **"Analyze File"** button.
 4.  An interactive tree diagram representing the code structure will appear.
 5.  Click on any class or function node in the diagram.
-6.  The corresponding source code for that node will be displayed in the box below the diagram.
+6.  The corresponding source code for that node will be displayed in the box below the diagram. If you click on a function or method, arrows will also appear on the diagram showing which other functions/methods call the selected one.
