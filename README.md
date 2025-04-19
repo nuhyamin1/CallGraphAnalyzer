@@ -5,6 +5,7 @@ This simple web application helps you visualize the structure of your Python cod
 ## Screenshot
 
 ![Application Screenshot](./images/screenshot.png)
+![Application Screenshot](./images/screenshot2.png)
 
 ## Features
 
