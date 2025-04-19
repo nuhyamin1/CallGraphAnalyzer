@@ -3,13 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Breaker</title>
+    <title>Code Breaker - Force Graph</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://d3js.org/d3.v7.min.js"></script>
-
+    <style>
+        /* Additional styles specific to force graph if needed */
+        .node circle {
+            stroke-width: 1.5px;
+            cursor: grab; /* Indicate draggable */
+        }
+        .node text {
+            pointer-events: none; /* Prevent text from interfering with drag */
+            font: 10px sans-serif;
+        }
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+        .call-link {
+            stroke: #e74c3c;
+            stroke-width: 2px;
+            stroke-dasharray: 4, 2;
+            opacity: 0.9;
+        }
+        .arrowhead {
+            fill: #e74c3c;
+        }
+    </style>
 </head>
 <body>
-    <h1>Code Structure Visualizer</h1>
+    <h1>Code Structure Visualizer (Force Graph)</h1>
 
     <form method="post" enctype="multipart/form-data">
         <input type="file" name="file" accept=".py" required>
@@ -20,7 +43,7 @@
         <p class="error">Error: {{ error }}</p>
     {% endif %}
 
-    <svg width="960" height="500"></svg>
+    <svg width="960" height="600"></svg> {# Increased height slightly #}
 
     <div id="code-display">
         <div id="code-content">Click on a node (class or function) to see its code here.</div>
@@ -32,97 +55,172 @@
         const svg = d3.select("svg");
         const width = +svg.attr("width");
         const height = +svg.attr("height");
-        const g = svg.append("g").attr("transform", "translate(40,0)"); // Main group for tree
-        const linkGroup = g.append("g"); // Group for standard tree links
-        const callLinkGroup = g.append("g"); // Group for dynamic call links (DRAW FIRST)
-        const nodeGroup = g.append("g"); // Group for nodes (DRAW ON TOP of call links)
 
-        // Map to store nodes by their unique ID for quick lookup
-        const nodesById = new Map();
+        // --- Data Preparation for Force Graph ---
+        const graphNodes = [];
+        const graphLinks = [];
+        const nodesById = new Map(); // Still useful for lookups
 
-        if (codeStructure && codeStructure.children && codeStructure.children.length > 0 && !codeStructure.error) {
-            const treeLayout = d3.tree().size([height, width - 160]); // Adjust width for labels
+        function flattenHierarchy(node, parentId = null) {
+            if (!node || !node.id) return; // Skip if node or id is missing
 
-            const root = d3.hierarchy(codeStructure, d => d.children); // Ensure children accessor is correct
-            treeLayout(root);
+            // Avoid adding duplicates if already processed
+            if (nodesById.has(node.id)) return;
 
-            // Populate the nodesById map
-            root.descendants().forEach(node => {
-                if (node.data.id) { // Only map nodes with an ID
-                    nodesById.set(node.data.id, node);
-                }
-            });
+            const graphNode = { ...node }; // Copy data
+            graphNodes.push(graphNode);
+            nodesById.set(node.id, graphNode);
 
-            // Standard Tree Links
-            linkGroup.selectAll(".link")
-                .data(root.links()) // Use root.links() for standard parent-child links
-                .enter().append("path")
-                .attr("class", "link")
-                .attr("d", d3.linkHorizontal()
-                    .x(d => d.y) // source/target are properties of link objects
-                    .y(d => d.x));
+            // Add structural link if it has a parent in the hierarchy
+            if (parentId && parentId !== 'root') { // Don't link to the virtual root
+                 // Ensure parent exists in the map before adding link
+                 if (nodesById.has(parentId)) {
+                    graphLinks.push({ source: parentId, target: node.id });
+                 } else {
+                    console.warn(`Parent node ${parentId} not found when processing child ${node.id}`);
+                 }
+            }
 
-            // Nodes
-            const node = nodeGroup.selectAll(".node")
-                .data(root.descendants()) // Use root.descendants() for nodes
-                .enter().append("g")
-                .attr("class", d => "node" + (d.children ? " node--internal" : " node--leaf"))
-                .attr("transform", d => `translate(${d.y},${d.x})`)
-                .attr("id", d => `node-${d.data.id}`); // Assign ID to the node group
+            // Recursively process children
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(child => flattenHierarchy(child, node.id));
+            }
+        }
+
+        // Start flattening from the virtual root's children
+        if (codeStructure && codeStructure.children) {
+             codeStructure.children.forEach(child => flattenHierarchy(child, codeStructure.id)); // Pass root ID
+        }
+        // --- End Data Preparation ---
+
+
+        if (graphNodes.length > 0 && !codeStructure.error) {
+
+            // --- Force Simulation Setup ---
+            const simulation = d3.forceSimulation(graphNodes)
+                .force("link", d3.forceLink(graphLinks).id(d => d.id).distance(50)) // Link force based on IDs
+                .force("charge", d3.forceManyBody().strength(-150)) // Repulsion force
+                .force("center", d3.forceCenter(width / 2, height / 2)) // Centering force
+                .force("collide", d3.forceCollide().radius(15)); // Prevent node overlap
+
+            // --- SVG Element Creation ---
+            // Define arrowhead marker
+            svg.append("defs").append("marker")
+               .attr("id", "arrow")
+               .attr("viewBox", "0 -5 10 10")
+               .attr("refX", 18) // Adjusted slightly for node radius + stroke
+               .attr("refY", 0)
+               .attr("markerWidth", 6)
+               .attr("markerHeight", 6)
+               .attr("orient", "auto")
+               .append("path")
+               .attr("d", "M0,-5L10,0L0,5")
+               .attr("class", "arrowhead");
+
+            // Group for all elements
+            const g = svg.append("g");
+
+            // Structural Links (drawn first)
+            const link = g.append("g")
+                .attr("class", "links")
+                .selectAll("line")
+                .data(graphLinks)
+                .join("line")
+                .attr("class", "link");
+
+            // Call Links Group (drawn on top of structural links)
+            const callLinkGroup = g.append("g")
+                .attr("class", "call-links");
+
+            // Nodes (drawn last, on top)
+            const node = g.append("g")
+                .attr("class", "nodes")
+                .selectAll("g")
+                .data(graphNodes)
+                .join("g")
+                .attr("class", "node")
+                .attr("id", d => `node-${d.id}`); // Assign ID for potential selection
 
             node.append("circle")
                 .attr("r", 10)
-                // Add cursor pointer if it's a function/method that could be called or call others
-                .style("cursor", d => (d.data.type === 'function' || d.data.type === 'method') ? "pointer" : (d.data.code ? "pointer" : "default"));
+                .attr("fill", d => d.type === 'class' ? '#aec7e8' : (d.type === 'method' ? '#ffbb78' : '#98df8a')) // Color by type
+                .attr("stroke", "#fff");
 
             node.append("text")
-                .attr("dy", ".35em")
-                .attr("x", d => d.children ? -13 : 13) // Position text relative to circle
-                .style("text-anchor", d => d.children ? "end" : "start")
-                .text(d => `${d.data.name} (${d.data.type || 'module'})`); // Display name and type
+                .attr("x", 12)
+                .attr("y", 3)
+                .text(d => d.name);
 
+            // --- Simulation Tick Function ---
+            simulation.on("tick", () => {
+                link
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+
+                node
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+                // Update dynamic call links on tick as well
+                 callLinkGroup.selectAll(".call-link")
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+            });
+
+            // --- Drag Handling ---
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+                d3.select(this).select("circle").style("cursor", "grabbing");
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null; // Let simulation take over again
+                d.fy = null;
+                 d3.select(this).select("circle").style("cursor", "grab");
+            }
+
+            node.call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+            // --- Code Display and Call Link Logic ---
             const codeDisplay = d3.select("#code-display");
             const codeContent = d3.select("#code-content");
 
-            // Function to draw call links (showing functions THAT CALL the clicked node)
+            // Function to draw call links (Arrow from clicked node TO caller)
             function drawCallLinks(clickedNodeData) {
-                callLinkGroup.selectAll("*").remove(); // Clear previous call links
+                callLinkGroup.selectAll("*").remove(); // Clear previous
 
-                // Iterate through the functions THAT CALL the clicked node
                 if (clickedNodeData.called_by && clickedNodeData.called_by.length > 0) {
-                    const targetNode = nodesById.get(clickedNodeData.id); // The clicked node is the target
-                    if (!targetNode) return;
+                    const clickedNode = nodesById.get(clickedNodeData.id); // Get the simulation node object
+                    if (!clickedNode) return;
 
-                    // Define line generator with curve
-                    const lineGenerator = d3.line()
-                        .x(d => d.y) // Horizontal position from node's y
-                        .y(d => d.x) // Vertical position from node's x
-                        .curve(d3.curveBumpX); // Apply the curve
-
-                    clickedNodeData.called_by.forEach(callerId => { // Iterate through IDs in the 'called_by' list
-                        const callerNode = nodesById.get(callerId); // Node that calls the clicked one
-                        const clickedAsSourceNode = targetNode; // The clicked node is the source of the arrow
-
+                    clickedNodeData.called_by.forEach(callerId => {
+                        const callerNode = nodesById.get(callerId);
                         if (callerNode) {
-                            try {
-                                // Create points array: [clicked_node (source), caller (target)]
-                                const points = [clickedAsSourceNode, callerNode];
+                            // Store the node objects directly for the tick update
+                            const linkData = { source: clickedNode, target: callerNode };
 
-                                // Generate path data using the curved line generator
-                                const pathData = lineGenerator(points);
-                                if (!pathData || pathData.includes("NaN")) {
-                                    console.error("Invalid path data generated:", pathData, "Points:", points);
-                                    return; // Skip if path is invalid
-                                }
-
-                                // Append the path WITH marker pointing towards the CALLER node (target)
-                                callLinkGroup.append("path")
-                                    .attr("class", "call-link")
-                                    .attr("d", pathData)
-                                    .attr("marker-end", "url(#arrow)");
-                            } catch (error) {
-                                console.error("Error generating or appending path:", error, "Source:", clickedAsSourceNode, "Target:", callerNode);
-                            }
+                            callLinkGroup.append("line")
+                                .datum(linkData) // Bind data for tick updates
+                                .attr("class", "call-link")
+                                .attr("x1", d => d.source.x) // Initial position
+                                .attr("y1", d => d.source.y)
+                                .attr("x2", d => d.target.x)
+                                .attr("y2", d => d.target.y)
+                                .attr("marker-end", "url(#arrow)");
                         } else {
                             console.warn(`Caller node with ID ${callerId} not found in map.`);
                         }
@@ -130,53 +228,49 @@
                 }
             }
 
-             // Define arrowhead marker
-             svg.append("defs").append("marker")
-                .attr("id", "arrow")
-                .attr("viewBox", "0 -5 10 10")
-                .attr("refX", 15) // Controls the distance of the arrowhead from the line end
-                .attr("refY", 0)
-                .attr("markerWidth", 6)
-                .attr("markerHeight", 6)
-                .attr("orient", "auto")
-                .append("path")
-                .attr("d", "M0,-5L10,0L0,5")
-                .attr("class", "arrowhead");
-
-
-            // Add click listener to nodes
+            // Node click listener
             node.on("click", function(event, d) {
-                event.stopPropagation(); // Prevent click from bubbling up
+                event.stopPropagation(); // Prevent body click
 
                 // --- Selection and Code Display ---
-                nodeGroup.selectAll(".node circle").classed("selected", false); // Deselect all
+                node.selectAll("circle").attr("stroke", "#fff").attr("stroke-width", "1.5px"); // Deselect all visually
                 callLinkGroup.selectAll("*").remove(); // Clear previous call links
 
-                if (d.data.code) {
-                    d3.select(this).select("circle").classed("selected", true); // Select clicked
-                    codeContent.text(d.data.code);
+                d3.select(this).select("circle").attr("stroke", "#f39c12").attr("stroke-width", "3px"); // Highlight clicked
+
+                if (d.code) { // Use the node data bound by D3 (d, not d.data)
+                    codeContent.text(d.code);
                     codeDisplay.classed("visible", true); // Show drawer
                 } else {
                     codeDisplay.classed("visible", false); // Hide drawer if no code
                 }
 
                 // --- Draw Call Links ---
-                if (d.data.type === 'function' || d.data.type === 'method') {
-                    drawCallLinks(d.data);
+                if (d.type === 'function' || d.type === 'method') {
+                    drawCallLinks(d); // Pass the simulation node data (d)
                 }
             });
 
-            // Add click listener to the body to hide drawer and clear links
+            // Body click listener
             d3.select("body").on("click", function() {
                 codeDisplay.classed("visible", false);
-                nodeGroup.selectAll(".node circle").classed("selected", false); // Deselect nodes
+                node.selectAll("circle").attr("stroke", "#fff").attr("stroke-width", "1.5px"); // Deselect nodes
                 callLinkGroup.selectAll("*").remove(); // Clear call links
             });
 
-            // Prevent clicks inside the code display from closing it and clearing links
+            // Prevent clicks inside the code display from closing it
             codeDisplay.on("click", function(event) {
-                event.stopPropagation(); // Keep drawer open when clicking inside
+                event.stopPropagation();
             });
+
+             // --- Zooming ---
+             const zoom = d3.zoom()
+                .scaleExtent([0.1, 4]) // Zoom range
+                .on("zoom", (event) => {
+                    g.attr("transform", event.transform); // Apply zoom transform to the main group
+                });
+             svg.call(zoom);
+
 
             // --- Drawer Resizing Logic --- (Keep existing logic)
             const drawer = document.getElementById('code-display');
@@ -196,7 +290,6 @@
             document.addEventListener('mousemove', function(e) {
                 if (!isResizing) return;
                 let newWidth = startWidth + (e.clientX - startX);
-                // Clamp min/max width
                 newWidth = Math.max(200, Math.min(window.innerWidth * 0.9, newWidth));
                 drawer.style.width = newWidth + 'px';
             });
@@ -208,15 +301,16 @@
                 }
             });
             // --- End Drawer Resizing Logic ---
+
         } else if (codeStructure && codeStructure.error) {
-             g.append("text")
+             svg.append("text") // Append directly to SVG if no graph group 'g'
               .attr("x", width / 2)
               .attr("y", height / 2)
               .attr("text-anchor", "middle")
-              .attr("class", "error-message") // Style error message
+              .attr("class", "error-message")
               .text(`Error during analysis: ${codeStructure.error}. Please check the console or file.`);
-        } else if (!{{ error | tojson }}) { // Handle case where no file was uploaded yet
-             g.append("text")
+        } else if (!{{ error | tojson }}) {
+             svg.append("text") // Append directly to SVG
               .attr("x", width / 2)
               .attr("y", height / 2)
               .attr("text-anchor", "middle")
