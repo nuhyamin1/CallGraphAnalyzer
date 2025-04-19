@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Breaker</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        .node circle {
+            fill: #fff;
+            stroke: steelblue;
+            stroke-width: 3px;
+        }
+        .node text {
+            font: 12px sans-serif;
+        }
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Code Structure Visualizer</h1>
+
+    <form method="post" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".py" required>
+        <button type="submit">Analyze File</button>
+    </form>
+
+    {% if error %}
+        <p class="error">Error: {{ error }}</p>
+    {% endif %}
+
+    <svg width="960" height="500"></svg>
+
+    <script>
+        const codeStructure = {{ code_structure_json | safe }};
+        const svg = d3.select("svg");
+        const width = +svg.attr("width");
+        const height = +svg.attr("height");
+        const g = svg.append("g").attr("transform", "translate(40,0)"); // Adjust margin for labels
+
+        if (codeStructure && codeStructure.children && codeStructure.children.length > 0) {
+            const treeLayout = d3.tree().size([height, width - 160]); // Adjust width for labels
+
+            const root = d3.hierarchy(codeStructure);
+            treeLayout(root);
+
+            // Links
+            g.selectAll(".link")
+                .data(root.links())
+                .enter().append("path")
+                .attr("class", "link")
+                .attr("d", d3.linkHorizontal()
+                    .x(d => d.y)
+                    .y(d => d.x));
+
+            // Nodes
+            const node = g.selectAll(".node")
+                .data(root.descendants())
+                .enter().append("g")
+                .attr("class", d => "node" + (d.children ? " node--internal" : " node--leaf"))
+                .attr("transform", d => `translate(${d.y},${d.x})`);
+
+            node.append("circle")
+                .attr("r", 10);
+
+            node.append("text")
+                .attr("dy", ".35em")
+                .attr("x", d => d.children ? -13 : 13)
+                .style("text-anchor", d => d.children ? "end" : "start")
+                .text(d => `${d.data.name} (${d.data.type || 'module'})`);
+        } else if (!{{ error | tojson }}) {
+             g.append("text")
+              .attr("x", width / 2)
+              .attr("y", height / 2)
+              .attr("text-anchor", "middle")
+              .text("Upload a Python file to see its structure.");
+        }
+
+    </script>
+</body>
+</html>
