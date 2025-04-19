@@ -2,6 +2,10 @@
 
 This simple web application helps you visualize the structure of your Python code. Upload a `.py` file, and it will generate an interactive tree diagram showing the classes and functions within that file. You can click on the nodes in the tree to see the corresponding code snippet.
 
+## Screenshot
+
+![Application Screenshot](./images/screenshot.png)
+
 ## Features
 
 *   **File Upload:** Accepts Python (`.py`) files.
