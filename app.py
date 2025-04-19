@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request
 import ast
 import json
+import inspect # Used for getting source, though ast.get_source_segment is often better with AST
 
 app = Flask(__name__)
 
@@ -8,14 +9,17 @@ def analyze_code(code_content):
     """Parses Python code and returns a tree structure."""
     tree = ast.parse(code_content)
     structure = {'name': 'root', 'children': []}
-    
+    lines = code_content.splitlines()
+
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
-            class_node = {'name': node.name, 'type': 'class', 'children': []}
+            class_source = ast.get_source_segment(code_content, node)
+            class_node = {'name': node.name, 'type': 'class', 'code': class_source, 'children': []}
             for sub_node in ast.walk(node):
                 if isinstance(sub_node, ast.FunctionDef) and sub_node in node.body:
                      # Ensure it's a method directly under the class, not nested further
-                    method_node = {'name': sub_node.name, 'type': 'method'}
+                    method_source = ast.get_source_segment(code_content, sub_node)
+                    method_node = {'name': sub_node.name, 'type': 'method', 'code': method_source}
                     class_node['children'].append(method_node)
             structure['children'].append(class_node)
         elif isinstance(node, ast.FunctionDef) and isinstance(node.__dict__.get('_pprint_parent'), ast.Module):
@@ -31,13 +35,15 @@ def analyze_code(code_content):
                  if is_method:
                      break
              if not is_method:
-                func_node = {'name': node.name, 'type': 'function'}
+                func_source = ast.get_source_segment(code_content, node)
+                func_node = {'name': node.name, 'type': 'function', 'code': func_source}
                 structure['children'].append(func_node)
 
-    # Assign parent references for AST walk if needed for more complex checks
-    for node in ast.walk(tree):
-        for child in ast.iter_child_nodes(node):
-            child._pprint_parent = node
+    # Parent assignment might not be strictly needed for this structure anymore
+    # but doesn't hurt if left for potential future use.
+    # for node in ast.walk(tree):
+    #     for child in ast.iter_child_nodes(node):
+    #         child._pprint_parent = node
 
     return structure
 

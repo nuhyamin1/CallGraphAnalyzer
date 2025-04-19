@@ -30,6 +30,17 @@
         form {
             margin-bottom: 20px;
         }
+        #code-display {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            white-space: pre-wrap; /* Preserve whitespace and wrap lines */
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -45,6 +56,10 @@
     {% endif %}
 
     <svg width="960" height="500"></svg>
+
+    <div id="code-display">
+        Click on a node (class or function) to see its code here.
+    </div>
 
     <script>
         const codeStructure = {{ code_structure_json | safe }};
@@ -76,13 +91,26 @@
                 .attr("transform", d => `translate(${d.y},${d.x})`);
 
             node.append("circle")
-                .attr("r", 10);
+                .attr("r", 10)
+                .style("cursor", d => d.data.code ? "pointer" : "default"); // Add cursor pointer if code exists
 
             node.append("text")
                 .attr("dy", ".35em")
                 .attr("x", d => d.children ? -13 : 13)
                 .style("text-anchor", d => d.children ? "end" : "start")
                 .text(d => `${d.data.name} (${d.data.type || 'module'})`);
+
+            // Add click listener to nodes
+            node.on("click", function(event, d) {
+                const codeDisplay = d3.select("#code-display");
+                if (d.data.code) {
+                    codeDisplay.text(d.data.code);
+                } else if (d.data.type !== 'root') { // Don't clear for root if it has no code
+                    codeDisplay.text(`No specific code snippet available for ${d.data.name} (${d.data.type}).`);
+                } else {
+                     codeDisplay.text('Click on a class or function node to see its code.');
+                }
+            });
         } else if (!{{ error | tojson }}) {
              g.append("text")
               .attr("x", width / 2)
