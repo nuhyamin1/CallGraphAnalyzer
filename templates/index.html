@@ -67,6 +67,11 @@
 
             // Add click listener to nodes
             node.on("click", function(event, d) {
+                // Remove selected class from all circles
+                g.selectAll(".node circle").classed("selected", false);
+                // Add selected class to the clicked circle
+                d3.select(this).select("circle").classed("selected", true);
+
                 const codeDisplay = d3.select("#code-display");
                 if (d.data.code) {
                     codeDisplay.text(d.data.code);
