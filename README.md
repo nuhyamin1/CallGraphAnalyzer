@@ -1,4 +1,4 @@
-# Code Breaker - Python Code Structure Visualizer
+# CallGraphAnalyzer - Python Code Structure Visualizer
 
 This simple web application helps you visualize the structure of your Python code. Upload a `.py` file, and it will generate an interactive tree diagram showing the classes and functions within that file. You can click on the nodes in the tree to see the corresponding code snippet.
 
