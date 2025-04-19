@@ -46,6 +46,13 @@
         <p class="error">Error: {{ error }}</p>
     {% endif %}
 
+    <div id="legend">
+        <h3>Legend</h3>
+        <div><span style="background-color: #aec7e8;"></span> Class</div>
+        <div><span style="background-color: #ffbb78;"></span> Method</div>
+        <div><span style="background-color: #98df8a;"></span> Function</div>
+    </div>
+
     <svg width="960" height="600"></svg> {# Increased height slightly #}
 
     <div id="code-display">
@@ -59,8 +66,8 @@
     <script>
         const codeStructure = {{ code_structure_json | safe }};
         const svg = d3.select("svg");
-        const width = +svg.attr("width");
-        const height = +svg.attr("height");
+        const width = svg.node().clientWidth;
+        const height = svg.node().clientHeight || 600; // Fallback if height not set
 
         // --- Data Preparation for Force Graph ---
         const graphNodes = [];
@@ -156,6 +163,8 @@
                 .attr("x", 12)
                 .attr("y", 3)
                 .text(d => d.name);
+            
+            node.append("title").text(d => d.name);
 
             // --- Simulation Tick Function ---
             simulation.on("tick", () => {
@@ -207,28 +216,27 @@
 
             // Function to draw call links (Arrow from clicked node TO caller)
             function drawCallLinks(clickedNodeData) {
-                callLinkGroup.selectAll("*").remove(); // Clear previous
-
+                callLinkGroup.selectAll("*").remove();
                 if (clickedNodeData.called_by && clickedNodeData.called_by.length > 0) {
-                    const clickedNode = nodesById.get(clickedNodeData.id); // Get the simulation node object
+                    const clickedNode = nodesById.get(clickedNodeData.id);
                     if (!clickedNode) return;
 
                     clickedNodeData.called_by.forEach(callerId => {
                         const callerNode = nodesById.get(callerId);
                         if (callerNode) {
-                            // Store the node objects directly for the tick update
                             const linkData = { source: clickedNode, target: callerNode };
-
                             callLinkGroup.append("line")
-                                .datum(linkData) // Bind data for tick updates
+                                .datum(linkData)
                                 .attr("class", "call-link")
-                                .attr("x1", d => d.source.x) // Initial position
+                                .attr("x1", d => d.source.x)
                                 .attr("y1", d => d.source.y)
-                                .attr("x2", d => d.target.x)
-                                .attr("y2", d => d.target.y)
-                                .attr("marker-end", "url(#arrow)");
-                        } else {
-                            console.warn(`Caller node with ID ${callerId} not found in map.`);
+                                .attr("x2", d => d.source.x) // Start at source
+                                .attr("y2", d => d.source.y)
+                                .attr("marker-end", "url(#arrow)")
+                                .transition()
+                                .duration(500)
+                                .attr("x2", d => d.target.x) // Animate to target
+                                .attr("y2", d => d.target.y);
                         }
                     });
                 }
