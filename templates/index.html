@@ -4,44 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Code Breaker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        body {
-            font-family: sans-serif;
-            margin: 20px;
-        }
-        .node circle {
-            fill: #fff;
-            stroke: steelblue;
-            stroke-width: 3px;
-        }
-        .node text {
-            font: 12px sans-serif;
-        }
-        .link {
-            fill: none;
-            stroke: #ccc;
-            stroke-width: 2px;
-        }
-        .error {
-            color: red;
-            margin-top: 10px;
-        }
-        form {
-            margin-bottom: 20px;
-        }
-        #code-display {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #f5f5f5;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            white-space: pre-wrap; /* Preserve whitespace and wrap lines */
-            font-family: monospace;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-    </style>
+
 </head>
 <body>
     <h1>Code Structure Visualizer</h1>

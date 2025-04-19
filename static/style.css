@@ -1,0 +1,104 @@
+/* Basic Reset & Body Styling */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f7f6;
+    color: #333;
+    line-height: 1.6;
+}
+
+h1 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+/* Form Styling */
+form {
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+input[type="file"] {
+    border: 1px solid #ccc;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+button[type="submit"] {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+button[type="submit"]:hover {
+    background-color: #2980b9;
+}
+
+/* SVG/Tree Styling */
+svg {
+    display: block;
+    margin: 0 auto;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.node circle {
+    fill: #fff;
+    stroke: #3498db;
+    stroke-width: 2px;
+}
+
+.node text {
+    font: 12px sans-serif;
+    fill: #555;
+}
+
+.node--internal text {
+    text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+}
+
+.link {
+    fill: none;
+    stroke: #ccc;
+    stroke-width: 1.5px;
+}
+
+/* Code Display Area */
+#code-display {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: #2c3e50; /* Dark background */
+    color: #ecf0f1; /* Light text */
+    border: 1px solid #34495e;
+    border-radius: 8px;
+    white-space: pre-wrap; /* Preserve whitespace and wrap lines */
+    font-family: "Courier New", Courier, monospace;
+    max-height: 400px;
+    overflow-y: auto;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Error Message */
+.error {
+    color: #e74c3c;
+    background-color: #fdd;
+    border: 1px solid #e74c3c;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 15px;
+    text-align: center;
+}
