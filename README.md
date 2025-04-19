@@ -1,6 +1,6 @@
-# CallGraphAnalyzer - Python Code Structure Visualizer
+# CallGraphAnalyzer - Python Code Structure and Call Visualizer
 
-This simple web application helps you visualize the structure of your Python code. Upload a `.py` file, and it will generate an interactive tree diagram showing the classes and functions within that file. You can click on the nodes in the tree to see the corresponding code snippet.
+This simple web application helps you visualize the structure of your Python code and understand its call relationships. Upload a `.py` file, and it will generate an interactive force-graph showing classes and functions. Clicking on a function or method node not only displays its code but also highlights where it's called from within the analyzed file.
 
 ## Screenshot
 
@@ -11,8 +11,8 @@ This simple web application helps you visualize the structure of your Python cod
 
 *   **File Upload:** Accepts Python (`.py`) files.
 *   **Structure Visualization:** Displays a hierarchical tree view of classes, methods, and top-level functions using D3.js.
-*   **Code Snippet Display:** Click on a class or function node in the tree to view its source code directly on the page.
-*   **Call Link Visualization:** Clicking on a function or method node also displays arrows pointing *from* the clicked node *to* the functions/methods that call it.
+*   **Call Relationship Visualization:** Interactively see which functions or methods call a selected function/method. Clicking a node highlights incoming calls, making it easy to trace execution flow.
+*   **Code Snippet Display:** Click on any class or function node in the tree to view its source code directly on the page.
 *   **Simple Web Interface:** Built with Flask for the backend and basic HTML/CSS/JavaScript for the frontend.
 
 ## Setup
