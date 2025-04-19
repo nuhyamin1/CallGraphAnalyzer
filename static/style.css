@@ -62,6 +62,12 @@ svg {
     stroke-width: 2px;
 }
 
+/* Highlighted Node Style */
+.node.highlighted circle {
+    stroke: #f39c12; /* Orange stroke */
+    stroke-width: 3px;
+}
+
 .node circle.selected {
     fill: #f1c40f; /* Example highlight color */
     stroke: #f39c12;

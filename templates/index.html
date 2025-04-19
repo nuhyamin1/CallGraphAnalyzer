@@ -233,10 +233,10 @@
                 event.stopPropagation(); // Prevent body click
 
                 // --- Selection and Code Display ---
-                node.selectAll("circle").attr("stroke", "#fff").attr("stroke-width", "1.5px"); // Deselect all visually
+                node.classed("highlighted", false); // Remove highlight from all nodes
                 callLinkGroup.selectAll("*").remove(); // Clear previous call links
 
-                d3.select(this).select("circle").attr("stroke", "#f39c12").attr("stroke-width", "3px"); // Highlight clicked
+                d3.select(this).classed("highlighted", true); // Add highlight to clicked node
 
                 if (d.code) { // Use the node data bound by D3 (d, not d.data)
                     codeContent.text(d.code);
@@ -254,7 +254,7 @@
             // Body click listener
             d3.select("body").on("click", function() {
                 codeDisplay.classed("visible", false);
-                node.selectAll("circle").attr("stroke", "#fff").attr("stroke-width", "1.5px"); // Deselect nodes
+                node.classed("highlighted", false); // Remove highlight from all nodes
                 callLinkGroup.selectAll("*").remove(); // Clear call links
             });
 
