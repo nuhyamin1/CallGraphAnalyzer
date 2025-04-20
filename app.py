@@ -1,9 +1,17 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
+import os # Needed for path operations
+import time # Needed for unique filenames
 import ast
 import json
 # import inspect # Not strictly needed with ast.get_source_segment
 
 app = Flask(__name__)
+UPLOAD_FOLDER = 'uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Ensure the upload folder exists
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
 def get_call_name(call_node):
     """Attempts to get the name of the function being called."""
@@ -46,6 +54,8 @@ class CodeAnalyzer(ast.NodeVisitor):
             'id': class_id,
             'type': 'class',
             'code': class_source,
+            'start_line': node.lineno, # Add start line
+            'end_line': node.end_lineno,   # Add end line
             'children': [],
             'instantiated_by': [] # New: Track where this class is instantiated
         }
@@ -85,6 +95,8 @@ class CodeAnalyzer(ast.NodeVisitor):
                 'id': func_id,
                 'type': func_type,
                 'code': func_source,
+                'start_line': node.lineno, # Add start line
+                'end_line': node.end_lineno,   # Add end line
                 'calls': [],      # List of IDs this function calls
                 'called_by': [],  # List of IDs that call this function
                 'instantiates': [] # New: Track classes this function/method instantiates
@@ -188,6 +200,10 @@ class CodeAnalyzer(ast.NodeVisitor):
                 self.visit(value)
 
 
+# Store original code content globally (simple approach for demo)
+# In a real app, consider better state management (e.g., session, database)
+original_code_store = {}
+
 def analyze_code(code_content):
     """Parses Python code and returns a tree structure with call relationships."""
     try:
@@ -214,6 +230,9 @@ def analyze_code(code_content):
 def index():
     code_structure = None
     error = None
+    uploaded_filename = None # Keep track of the uploaded file name
+    original_file_path = None # Keep track of the saved file path
+
     if request.method == 'POST':
         if 'file' not in request.files:
             error = 'No file part'
@@ -223,18 +242,101 @@ def index():
                 error = 'No selected file'
             elif file and file.filename.endswith('.py'):
                 try:
-                    code_content = file.read().decode('utf-8')
+                    # Save the uploaded file to allow editing later
+                    timestamp = int(time.time())
+                    original_filename = file.filename
+                    # Sanitize filename slightly (basic)
+                    safe_filename = f"{timestamp}_{''.join(c for c in original_filename if c.isalnum() or c in ['.', '_'])}"
+                    original_file_path = os.path.join(app.config['UPLOAD_FOLDER'], safe_filename)
+                    file.seek(0) # Go back to the start of the file stream
+                    file.save(original_file_path)
+                    uploaded_filename = safe_filename # Store the name we saved it as
+
+                    # Read content from the saved file for analysis
+                    with open(original_file_path, 'r', encoding='utf-8') as f_saved:
+                        code_content = f_saved.read()
+
+                    # Store the original content for the save operation
+                    original_code_store[uploaded_filename] = code_content
+
                     code_structure = analyze_code(code_content)
+                    if 'error' in code_structure:
+                        error = code_structure['error'] # Pass analysis errors
+
                 except Exception as e:
-                    error = f"Error parsing file: {e}"
+                    error = f"Error processing file: {e}"
             else:
                 error = 'Invalid file type, please upload a .py file'
 
     # Default structure if no file is uploaded or on GET request
     if code_structure is None and error is None:
-        code_structure = {'name': 'root', 'children': []} # Provide an empty root
+        code_structure = {'name': 'root', 'id': 'root', 'children': []} # Provide an empty root
 
-    return render_template('index.html', code_structure_json=json.dumps(code_structure), error=error)
+    return render_template('index.html',
+                           code_structure_json=json.dumps(code_structure),
+                           error=error,
+                           uploaded_filename=uploaded_filename # Pass filename to template
+                           )
+
+@app.route('/save', methods=['POST'])
+def save_code():
+    data = request.get_json()
+    filename = data.get('filename')
+    node_id = data.get('node_id') # We might use this later if needed
+    edited_code = data.get('edited_code')
+    start_line = data.get('start_line')
+    end_line = data.get('end_line')
+
+    if not all([filename, edited_code, start_line is not None, end_line is not None]):
+        return jsonify({'success': False, 'error': 'Missing data'}), 400
+
+    # Retrieve the original code using the filename as key
+    original_code = original_code_store.get(filename)
+    if original_code is None:
+         # Fallback: try reading from the originally saved file path if store is empty
+         original_file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+         if os.path.exists(original_file_path):
+             try:
+                 with open(original_file_path, 'r', encoding='utf-8') as f:
+                     original_code = f.read()
+             except Exception as e:
+                 return jsonify({'success': False, 'error': f'Could not read original file: {e}'}), 500
+         else:
+              return jsonify({'success': False, 'error': 'Original code not found or file missing.'}), 404
+
+    try:
+        lines = original_code.splitlines(True) # Keep line endings
+        # Adjust to 0-based index for list slicing
+        start_index = start_line - 1
+        end_index = end_line # Slicing is exclusive at the end
+
+        # Basic validation
+        if start_index < 0 or end_index > len(lines) or start_index >= end_index:
+             return jsonify({'success': False, 'error': 'Invalid line numbers for replacement.'}), 400
+
+        # Construct the new code
+        # Ensure edited code ends with a newline if the original block did, or if needed
+        if not edited_code.endswith('\n'):
+            edited_code += '\n'
+
+        new_lines = lines[:start_index] + [edited_code] + lines[end_index:]
+        modified_code = "".join(new_lines)
+
+        # Save the modified code back to the *same file* in uploads for simplicity in this demo
+        # In a real app, you might save as a new version or different file
+        save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(modified_code)
+
+        # Update the stored code as well
+        original_code_store[filename] = modified_code
+
+        return jsonify({'success': True, 'message': f'File {filename} saved successfully.'})
+
+    except Exception as e:
+        print(f"Error saving file: {e}") # Log error server-side
+        return jsonify({'success': False, 'error': f'Error saving file: {e}'}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)

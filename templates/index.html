@@ -9,6 +9,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-python.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css">
+    <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/python/python.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/material-darker.css">
     <style>
         /* Additional styles specific to force graph if needed */
         .node circle {
@@ -50,6 +54,26 @@
             stroke: #333;
             stroke-width: 3px;
         }
+        /* CodeMirror styling */
+        #code-display .CodeMirror {
+            height: calc(100% - 40px); /* Adjust height considering header */
+            border: 1px solid #ccc;
+        }
+        #code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 5px 10px;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            height: 30px; /* Fixed height for header */
+        }
+        #code-header span {
+            font-weight: bold;
+        }
+        #code-header button {
+            margin-left: 10px;
+        }
     </style>
 </head>
 <body>
@@ -75,14 +99,21 @@
 
     <div id="code-display">
         <div id="code-header">
-            <button id="close-drawer">Close</button>
+            <span id="code-title">Code Viewer</span>
+            <div>
+                <button id="save-code" style="display: none;">Save</button>
+                <button id="close-drawer">Close</button>
+            </div>
         </div>
-        <div id="code-content">Click on a node (class or function) to see its code here.</div>
+        <div id="code-content-wrapper"> <!-- Wrapper for CodeMirror -->
+             <textarea id="code-editor"></textarea> <!-- Use textarea for CodeMirror -->
+        </div>
         <div id="resize-handle"></div>
     </div>
 
     <script>
         const codeStructure = {{ code_structure_json | safe }};
+        const uploadedFilename = {{ uploaded_filename | tojson | safe }};
         const svg = d3.select("svg");
         const width = svg.node().clientWidth;
         const height = svg.node().clientHeight || 600;
@@ -238,7 +269,21 @@
 
             // --- Code Display and Link Logic ---
             const codeDisplay = d3.select("#code-display");
-            const codeContent = d3.select("#code-content");
+            // const codeContent = d3.select("#code-content"); // No longer directly used
+            const codeContentWrapper = document.getElementById('code-content-wrapper');
+            const codeTitle = document.getElementById('code-title');
+            const saveCodeButton = document.getElementById('save-code');
+            let currentCodeNodeData = null; // Store full data of the selected node
+
+            // --- Initialize CodeMirror --- (Do this once)
+            const codeEditor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+                lineNumbers: true,
+                mode: "python",
+                theme: "material-darker",
+                readOnly: true // Initially read-only
+            });
+            codeEditor.setSize("100%", "100%"); // Make it fill the wrapper
+            codeContentWrapper.style.height = 'calc(100% - 40px)'; // Adjust wrapper height
 
             function clearDynamicLinks() {
                 callLinkGroup.selectAll("*").remove();
@@ -304,14 +349,21 @@
                 node.classed("highlighted", false); // Remove highlight from all
                 d3.select(this).classed("highlighted", true); // Highlight clicked
 
-                // Display code
-                if (d.code) {
-                    codeContent.selectAll("*").remove();
-                    const pre = codeContent.append("pre");
-                    const code = pre.append("code").classed("language-python", true).text(d.code);
-                    Prism.highlightElement(code.node());
+                // Display code in the CodeMirror editor
+                currentCodeNodeData = nodesById.get(d.id);
+                if (currentCodeNodeData && currentCodeNodeData.code) {
+                    codeTitle.textContent = `Editing: ${currentCodeNodeData.name} (${currentCodeNodeData.type})`;
+                    codeEditor.setValue(currentCodeNodeData.code);
+                    codeEditor.setOption("readOnly", false); // Make editable
+                    saveCodeButton.style.display = 'inline-block'; // Show save button
                     codeDisplay.classed("visible", true);
+                    // Ensure CodeMirror refreshes its layout if the container was hidden/resized
+                    setTimeout(() => codeEditor.refresh(), 10);
                 } else {
+                    codeTitle.textContent = 'Code Viewer';
+                    codeEditor.setValue('No code available for this node.');
+                    codeEditor.setOption("readOnly", true); // Make read-only
+                    saveCodeButton.style.display = 'none'; // Hide save button
                     codeDisplay.classed("visible", false);
                 }
 
@@ -319,11 +371,57 @@
                 drawLinks(d);
             });
 
-            // --- UI Interaction (Closing drawer, Zooming, Resizing) ---
+            // --- UI Interaction (Closing drawer, Saving, Zooming, Resizing) ---
             d3.select("#close-drawer").on("click", function() {
                 codeDisplay.classed("visible", false);
                 node.classed("highlighted", false);
                 clearDynamicLinks(); // Clear links when closing drawer
+                currentCodeNodeData = null;
+                codeEditor.setValue(''); // Clear editor
+                codeEditor.setOption("readOnly", true); // Make read-only
+                saveCodeButton.style.display = 'none'; // Hide save button
+                codeTitle.textContent = 'Code Viewer';
+            });
+
+            // --- Save Button Logic ---
+            saveCodeButton.addEventListener('click', async () => {
+                if (!currentCodeNodeData || !uploadedFilename) {
+                    alert('No node selected or file context missing.');
+                    return;
+                }
+
+                const editedCode = codeEditor.getValue();
+
+                try {
+                    const response = await fetch('/save', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            filename: uploadedFilename,
+                            node_id: currentCodeNodeData.id,
+                            edited_code: editedCode,
+                            start_line: currentCodeNodeData.start_line,
+                            end_line: currentCodeNodeData.end_line
+                        }),
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        alert(result.message);
+                        // Update the node data locally
+                        currentCodeNodeData.code = editedCode;
+                        // Optional: Re-run analysis or simply reflect the change locally
+                        // For simplicity, we just updated local data. A full refresh might be better.
+                    } else {
+                        alert(`Error saving: ${result.error}`);
+                    }
+                } catch (error) {
+                    console.error('Error saving code:', error);
+                    alert('An error occurred while trying to save the code.');
+                }
             });
 
             codeDisplay.on("click", function(event) { event.stopPropagation(); });
