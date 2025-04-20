@@ -46,15 +46,20 @@ class CodeAnalyzer(ast.NodeVisitor):
             'id': class_id,
             'type': 'class',
             'code': class_source,
-            'children': []
+            'children': [],
+            'instantiated_by': [] # New: Track where this class is instantiated
         }
-        # Add to main structure BEFORE visiting children to handle methods correctly
+        # Add to main structure BEFORE visiting children
         self.structure['children'].append(class_node_info)
-        # Store definition info (though classes themselves aren't directly callable in this context)
-        # self.definitions[class_id] = class_node_info # Optional
+        # Store definition info
+        if class_id not in self.definitions: # Avoid overriding if visited multiple times? (Shouldn't happen with current logic)
+             self.definitions[class_id] = class_node_info
 
         # Visit children (methods)
+        original_scope = self.current_scope_id # Store scope in case of nested classes (though not fully handled)
+        self.current_scope_id = class_id # Set scope for methods
         self.generic_visit(node)
+        self.current_scope_id = original_scope # Restore scope
 
 
     def visit_FunctionDef(self, node):
@@ -82,24 +87,31 @@ class CodeAnalyzer(ast.NodeVisitor):
                 'code': func_source,
                 'calls': [],      # List of IDs this function calls
                 'called_by': [],  # List of IDs that call this function
+                'instantiates': [] # New: Track classes this function/method instantiates
             }
             self.definitions[func_id] = func_node_info
 
             # Add to the correct parent in the structure
             if is_method:
-                # Find the parent class node in the main structure
-                for class_struct in self.structure['children']:
-                    if class_struct['type'] == 'class' and class_struct['name'] == scope_name:
-                        # Avoid adding duplicates if visited multiple times
-                        if not any(child['id'] == func_id for child in class_struct.get('children', [])):
-                             class_struct.setdefault('children', []).append(func_node_info)
-                        break
+                # Find the parent class node (should exist in definitions now)
+                if scope_name in self.definitions and self.definitions[scope_name]['type'] == 'class':
+                    parent_class_struct = self.definitions[scope_name]
+                    # Avoid adding duplicates
+                    if not any(child['id'] == func_id for child in parent_class_struct.get('children', [])):
+                        parent_class_struct.setdefault('children', []).append(func_node_info)
+                else:
+                    # Fallback: search in structure (should ideally not be needed)
+                     for class_struct in self.structure['children']:
+                         if class_struct['type'] == 'class' and class_struct['name'] == scope_name:
+                             if not any(child['id'] == func_id for child in class_struct.get('children', [])):
+                                  class_struct.setdefault('children', []).append(func_node_info)
+                             break
             else:
                  # Avoid adding duplicates if visited multiple times
                  if not any(child['id'] == func_id for child in self.structure['children'] if child['type'] == 'function'):
                     self.structure['children'].append(func_node_info)
 
-        # --- Pass 2 Logic: Find calls within this function ---
+        # --- Pass 2 Logic: Find calls/instantiations within this function ---
         # Set current scope for call detection
         original_scope = self.current_scope_id
         self.current_scope_id = func_id
@@ -110,36 +122,55 @@ class CodeAnalyzer(ast.NodeVisitor):
 
 
     def visit_Call(self, node):
-        # --- Pass 2 Logic: Process a call ---
-        if self.current_scope_id: # Only process calls if we are inside a known function/method scope
+        # --- Pass 2 Logic: Process a call or instantiation ---
+        if self.current_scope_id: # Only process if we are inside a known function/method scope
             caller_id = self.current_scope_id
+            # Ensure caller exists in definitions (it should if Pass 1 worked)
+            if caller_id not in self.definitions:
+                self.generic_visit(node) # Continue traversal
+                return
+
             callee_name = get_call_name(node)
 
             if callee_name:
-                # Attempt to find the definition ID matching the callee_name
-                # This is a simplification: it doesn't handle complex scopes or aliasing.
-                # It prioritizes methods within the same class if the caller is a method.
-                potential_callee_ids = []
-                if '.' in caller_id: # Caller is a method (Class.method)
-                    caller_class = caller_id.split('.')[0]
-                    potential_callee_ids.append(f"{caller_class}.{callee_name}") # Method in same class?
+                # Check if it's an instantiation of a known class
+                if callee_name in self.definitions and self.definitions[callee_name]['type'] == 'class':
+                    class_id = callee_name
+                    # Record instantiation
+                    # Add to caller's 'instantiates' list (avoid duplicates)
+                    if class_id not in self.definitions[caller_id]['instantiates']:
+                        self.definitions[caller_id]['instantiates'].append(class_id)
 
-                potential_callee_ids.append(callee_name) # Top-level function or method from another class?
+                    # Add to class's 'instantiated_by' list (avoid duplicates)
+                    if caller_id not in self.definitions[class_id]['instantiated_by']:
+                         self.definitions[class_id]['instantiated_by'].append(caller_id)
 
-                found_callee_id = None
-                for p_id in potential_callee_ids:
-                    if p_id in self.definitions:
-                        found_callee_id = p_id
-                        break
+                else: # Otherwise, treat as a potential function/method call
+                    # Attempt to find the definition ID matching the callee_name
+                    # This is a simplification: it doesn't handle complex scopes or aliasing.
+                    # It prioritizes methods within the same class if the caller is a method.
+                    potential_callee_ids = []
+                    if '.' in caller_id: # Caller is a method (Class.method)
+                        caller_class = caller_id.split('.')[0]
+                        potential_callee_ids.append(f"{caller_class}.{callee_name}") # Method in same class?
 
-                if found_callee_id:
-                    # Add to caller's 'calls' list (avoid duplicates)
-                    if found_callee_id not in self.definitions[caller_id]['calls']:
-                        self.definitions[caller_id]['calls'].append(found_callee_id)
+                    potential_callee_ids.append(callee_name) # Top-level function or method from another class?
 
-                    # Add to callee's 'called_by' list (avoid duplicates)
-                    if caller_id not in self.definitions[found_callee_id]['called_by']:
-                        self.definitions[found_callee_id]['called_by'].append(caller_id)
+                    found_callee_id = None
+                    for p_id in potential_callee_ids:
+                        # Make sure it's not a class instantiation we already handled
+                        if p_id in self.definitions and self.definitions[p_id]['type'] in ['function', 'method']:
+                            found_callee_id = p_id
+                            break
+
+                    if found_callee_id:
+                        # Add to caller's 'calls' list (avoid duplicates)
+                        if found_callee_id not in self.definitions[caller_id]['calls']:
+                            self.definitions[caller_id]['calls'].append(found_callee_id)
+
+                        # Add to callee's 'called_by' list (avoid duplicates)
+                        if caller_id not in self.definitions[found_callee_id]['called_by']:
+                            self.definitions[found_callee_id]['called_by'].append(caller_id)
 
         # Continue traversal in case of nested calls
         self.generic_visit(node)

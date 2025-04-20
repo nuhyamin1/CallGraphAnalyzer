@@ -20,17 +20,35 @@
             font: 10px sans-serif;
         }
         .link {
-            stroke: #999;
-            stroke-opacity: 0.6;
+            stroke: #ccc;
+            stroke-opacity: 0.5;
+            stroke-width: 1.5px;
         }
         .call-link {
             stroke: #e74c3c;
-            stroke-width: 2px;
+            stroke-width: 1.5px;
             stroke-dasharray: 4, 2;
             opacity: 0.9;
         }
-        .arrowhead {
-            fill: #e74c3c;
+        .instantiation-link {
+            stroke: #2ca02c;
+            stroke-width: 1.5px;
+            stroke-dasharray: 3, 3;
+            opacity: 0.8;
+        }
+        .instantiated-by-link {
+            stroke: #1f77b4;
+            stroke-width: 1.5px;
+            stroke-dasharray: 5, 2;
+            opacity: 0.8;
+        }
+        .arrowhead-call { fill: #e74c3c; }
+        .arrowhead-instantiation { fill: #2ca02c; }
+        .arrowhead-instantiated-by { fill: #1f77b4; }
+
+        .node.highlighted circle {
+            stroke: #333;
+            stroke-width: 3px;
         }
     </style>
 </head>
@@ -67,42 +85,42 @@
         const codeStructure = {{ code_structure_json | safe }};
         const svg = d3.select("svg");
         const width = svg.node().clientWidth;
-        const height = svg.node().clientHeight || 600; // Fallback if height not set
+        const height = svg.node().clientHeight || 600;
 
-        // --- Data Preparation for Force Graph ---
+        // --- Data Preparation ---
         const graphNodes = [];
-        const graphLinks = [];
-        const nodesById = new Map(); // Still useful for lookups
+        const graphLinks = []; // Structural links
+        const nodesById = new Map();
 
         function flattenHierarchy(node, parentId = null) {
-            if (!node || !node.id) return; // Skip if node or id is missing
-
-            // Avoid adding duplicates if already processed
+            if (!node || !node.id) return;
             if (nodesById.has(node.id)) return;
 
-            const graphNode = { ...node }; // Copy data
+            // Ensure necessary arrays exist even if empty from backend
+            node.calls = node.calls || [];
+            node.called_by = node.called_by || [];
+            node.instantiates = node.instantiates || [];
+            node.instantiated_by = node.instantiated_by || [];
+
+            const graphNode = { ...node };
             graphNodes.push(graphNode);
             nodesById.set(node.id, graphNode);
 
-            // Add structural link if it has a parent in the hierarchy
-            if (parentId && parentId !== 'root') { // Don't link to the virtual root
-                 // Ensure parent exists in the map before adding link
-                 if (nodesById.has(parentId)) {
-                    graphLinks.push({ source: parentId, target: node.id });
-                 } else {
+            if (parentId && parentId !== 'root') {
+                if (nodesById.has(parentId)) {
+                    graphLinks.push({ source: parentId, target: node.id, type: 'structure' }); // Add type
+                } else {
                     console.warn(`Parent node ${parentId} not found when processing child ${node.id}`);
-                 }
+                }
             }
 
-            // Recursively process children
             if (node.children && node.children.length > 0) {
                 node.children.forEach(child => flattenHierarchy(child, node.id));
             }
         }
 
-        // Start flattening from the virtual root's children
         if (codeStructure && codeStructure.children) {
-             codeStructure.children.forEach(child => flattenHierarchy(child, codeStructure.id)); // Pass root ID
+             codeStructure.children.forEach(child => flattenHierarchy(child, codeStructure.id));
         }
         // --- End Data Preparation ---
 
@@ -111,78 +129,86 @@
 
             // --- Force Simulation Setup ---
             const simulation = d3.forceSimulation(graphNodes)
-                .force("link", d3.forceLink(graphLinks).id(d => d.id).distance(50)) // Link force based on IDs
-                .force("charge", d3.forceManyBody().strength(-150)) // Repulsion force
-                .force("center", d3.forceCenter(width / 2, height / 2)) // Centering force
-                .force("collide", d3.forceCollide().radius(15)); // Prevent node overlap
+                .force("link", d3.forceLink(graphLinks).id(d => d.id).distance(60).strength(0.5)) // Adjusted distance
+                .force("charge", d3.forceManyBody().strength(-150)) // Adjusted repulsion
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collide", d3.forceCollide().radius(15));
 
             // --- SVG Element Creation ---
-            // Define arrowhead marker
-            svg.append("defs").append("marker")
-               .attr("id", "arrow")
-               .attr("viewBox", "0 -5 10 10")
-               .attr("refX", 18) // Adjusted slightly for node radius + stroke
-               .attr("refY", 0)
-               .attr("markerWidth", 6)
-               .attr("markerHeight", 6)
-               .attr("orient", "auto")
-               .append("path")
-               .attr("d", "M0,-5L10,0L0,5")
-               .attr("class", "arrowhead");
+            const defs = svg.append("defs");
+            // Arrowhead for Calls
+            defs.append("marker")
+               .attr("id", "arrow-call")
+               .attr("viewBox", "0 -5 10 10").attr("refX", 18).attr("refY", 0)
+               .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+               .append("path").attr("d", "M0,-5L10,0L0,5").attr("class", "arrowhead-call");
+            // Arrowhead for Instantiation (Function -> Class)
+            defs.append("marker")
+               .attr("id", "arrow-instantiation")
+               .attr("viewBox", "0 -5 10 10").attr("refX", 18).attr("refY", 0)
+               .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+               .append("path").attr("d", "M0,-5L10,0L0,5").attr("class", "arrowhead-instantiation");
+             // Arrowhead for Instantiated By (Class -> Function)
+            defs.append("marker")
+               .attr("id", "arrow-instantiated-by")
+               .attr("viewBox", "0 -5 10 10").attr("refX", 18).attr("refY", 0)
+               .attr("markerWidth", 6).attr("markerHeight", 6).attr("orient", "auto")
+               .append("path").attr("d", "M0,-5L10,0L0,5").attr("class", "arrowhead-instantiated-by");
 
-            // Group for all elements
-            const g = svg.append("g");
 
-            // Structural Links (drawn first)
-            const link = g.append("g")
-                .attr("class", "links")
+            const g = svg.append("g"); // Main group for zoom
+
+            // Structural Links
+            const link = g.append("g").attr("class", "links")
                 .selectAll("line")
                 .data(graphLinks)
                 .join("line")
                 .attr("class", "link");
 
-            // Call Links Group (drawn on top of structural links)
-            const callLinkGroup = g.append("g")
-                .attr("class", "call-links");
+            // Dynamic Links Groups (drawn on top)
+            const callLinkGroup = g.append("g").attr("class", "call-links");
+            const instantiationLinkGroup = g.append("g").attr("class", "instantiation-links");
+            const instantiatedByLinkGroup = g.append("g").attr("class", "instantiated-by-links"); // Added group
 
-            // Nodes (drawn last, on top)
-            const node = g.append("g")
-                .attr("class", "nodes")
+            // Nodes (drawn last)
+            const node = g.append("g").attr("class", "nodes")
                 .selectAll("g")
-                .data(graphNodes)
+                .data(graphNodes, d => d.id) // Key function for object constancy
                 .join("g")
                 .attr("class", "node")
-                .attr("id", d => `node-${d.id}`); // Assign ID for potential selection
+                .attr("id", d => `node-${d.id}`);
 
             node.append("circle")
                 .attr("r", 10)
-                .attr("fill", d => d.type === 'class' ? '#aec7e8' : (d.type === 'method' ? '#ffbb78' : '#98df8a')) // Color by type
+                .attr("fill", d => d.type === 'class' ? '#aec7e8' : (d.type === 'method' ? '#ffbb78' : '#98df8a'))
                 .attr("stroke", "#fff");
 
             node.append("text")
-                .attr("x", 12)
-                .attr("y", 3)
-                .text(d => d.name);
-            
-            node.append("title").text(d => d.name);
+                .attr("x", 12).attr("y", 3).text(d => d.name);
+
+            node.append("title").text(d => d.name); // Tooltip
 
             // --- Simulation Tick Function ---
             simulation.on("tick", () => {
-                link
-                    .attr("x1", d => d.source.x)
-                    .attr("y1", d => d.source.y)
-                    .attr("x2", d => d.target.x)
-                    .attr("y2", d => d.target.y);
+                link // Update structural links
+                    .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
 
-                node
-                    .attr("transform", d => `translate(${d.x},${d.y})`);
+                node // Update node positions
+                    .attr("transform", d => `translate(${d.x ?? 0},${d.y ?? 0})`); // Use nullish coalescing for safety
 
-                // Update dynamic call links on tick as well
-                 callLinkGroup.selectAll(".call-link")
-                    .attr("x1", d => d.source.x)
-                    .attr("y1", d => d.source.y)
-                    .attr("x2", d => d.target.x)
-                    .attr("y2", d => d.target.y);
+                // Update dynamic links
+                callLinkGroup.selectAll(".call-link")
+                    .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+
+                instantiationLinkGroup.selectAll(".instantiation-link")
+                     .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                     .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+
+                instantiatedByLinkGroup.selectAll(".instantiated-by-link")
+                     .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                     .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
             });
 
             // --- Drag Handling ---
@@ -210,33 +236,64 @@
                 .on("drag", dragged)
                 .on("end", dragended));
 
-            // --- Code Display and Call Link Logic ---
+            // --- Code Display and Link Logic ---
             const codeDisplay = d3.select("#code-display");
             const codeContent = d3.select("#code-content");
 
-            // Function to draw call links (Arrow from clicked node TO caller)
-            function drawCallLinks(clickedNodeData) {
+            function clearDynamicLinks() {
                 callLinkGroup.selectAll("*").remove();
-                if (clickedNodeData.called_by && clickedNodeData.called_by.length > 0) {
-                    const clickedNode = nodesById.get(clickedNodeData.id);
-                    if (!clickedNode) return;
+                instantiationLinkGroup.selectAll("*").remove();
+                instantiatedByLinkGroup.selectAll("*").remove();
+            }
 
-                    clickedNodeData.called_by.forEach(callerId => {
+            // Function to draw links (refactored)
+            function drawLinks(clickedNodeData) {
+                clearDynamicLinks(); // Clear previous dynamic links
+
+                const clickedNode = nodesById.get(clickedNodeData.id);
+                if (!clickedNode) return;
+
+                // 1. Draw 'called_by' links (Incoming calls to functions/methods)
+                if ((clickedNodeData.type === 'function' || clickedNodeData.type === 'method') && clickedNodeData.called_by.length > 0) {
+                     clickedNodeData.called_by.forEach(callerId => {
                         const callerNode = nodesById.get(callerId);
                         if (callerNode) {
-                            const linkData = { source: clickedNode, target: callerNode };
-                            callLinkGroup.append("line")
-                                .datum(linkData)
+                            const linkData = { source: clickedNode, target: callerNode }; // Arrow: Target -> Source (Caller -> Clicked)
+                            callLinkGroup.append("line").datum(linkData)
                                 .attr("class", "call-link")
-                                .attr("x1", d => d.source.x)
-                                .attr("y1", d => d.source.y)
-                                .attr("x2", d => d.source.x) // Start at source
-                                .attr("y2", d => d.source.y)
-                                .attr("marker-end", "url(#arrow)")
-                                .transition()
-                                .duration(500)
-                                .attr("x2", d => d.target.x) // Animate to target
-                                .attr("y2", d => d.target.y);
+                                .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                                .attr("x2", d => d.target.x).attr("y2", d => d.target.y)
+                                .attr("marker-end", "url(#arrow-call)");
+                        }
+                    });
+                }
+
+                // 2. Draw 'instantiates' links (Outgoing instantiations from functions/methods)
+                if ((clickedNodeData.type === 'function' || clickedNodeData.type === 'method') && clickedNodeData.instantiates.length > 0) {
+                    clickedNodeData.instantiates.forEach(classId => {
+                        const classNode = nodesById.get(classId);
+                        if (classNode) {
+                            const linkData = { source: clickedNode, target: classNode }; // Arrow: Source -> Target (Clicked -> Class)
+                            instantiationLinkGroup.append("line").datum(linkData)
+                                .attr("class", "instantiation-link")
+                                .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                                .attr("x2", d => d.target.x).attr("y2", d => d.target.y)
+                                .attr("marker-end", "url(#arrow-instantiation)");
+                        }
+                    });
+                }
+
+                 // 3. Draw 'instantiated_by' links (Incoming instantiations to classes)
+                if (clickedNodeData.type === 'class' && clickedNodeData.instantiated_by.length > 0) {
+                     clickedNodeData.instantiated_by.forEach(instantiatorId => {
+                        const instantiatorNode = nodesById.get(instantiatorId);
+                        if (instantiatorNode) {
+                            const linkData = { source: clickedNode, target: instantiatorNode }; // Arrow: Target -> Source (Instantiator -> Clicked Class)
+                            instantiatedByLinkGroup.append("line").datum(linkData)
+                                 .attr("class", "instantiated-by-link")
+                                 .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                                 .attr("x2", d => d.target.x).attr("y2", d => d.target.y)
+                                 .attr("marker-end", "url(#arrow-instantiated-by)");
                         }
                     });
                 }
@@ -244,12 +301,12 @@
 
             node.on("click", function(event, d) {
                 event.stopPropagation();
-                node.classed("highlighted", false);
-                callLinkGroup.selectAll("*").remove();
-                d3.select(this).classed("highlighted", true);
+                node.classed("highlighted", false); // Remove highlight from all
+                d3.select(this).classed("highlighted", true); // Highlight clicked
 
+                // Display code
                 if (d.code) {
-                    codeContent.selectAll("*").remove(); // Clear previous content
+                    codeContent.selectAll("*").remove();
                     const pre = codeContent.append("pre");
                     const code = pre.append("code").classed("language-python", true).text(d.code);
                     Prism.highlightElement(code.node());
@@ -258,32 +315,25 @@
                     codeDisplay.classed("visible", false);
                 }
 
-                if (d.type === 'function' || d.type === 'method') {
-                    drawCallLinks(d);
-                }
+                // Draw relevant dynamic links
+                drawLinks(d);
             });
 
+            // --- UI Interaction (Closing drawer, Zooming, Resizing) ---
             d3.select("#close-drawer").on("click", function() {
                 codeDisplay.classed("visible", false);
                 node.classed("highlighted", false);
-                callLinkGroup.selectAll("*").remove();
+                clearDynamicLinks(); // Clear links when closing drawer
             });
 
-            // Prevent clicks inside the code display from closing it
-            codeDisplay.on("click", function(event) {
-                event.stopPropagation();
+            codeDisplay.on("click", function(event) { event.stopPropagation(); });
+
+            const zoom = d3.zoom().scaleExtent([0.1, 4]).on("zoom", (event) => {
+                g.attr("transform", event.transform);
             });
+            svg.call(zoom);
 
-             // --- Zooming ---
-             const zoom = d3.zoom()
-                .scaleExtent([0.1, 4]) // Zoom range
-                .on("zoom", (event) => {
-                    g.attr("transform", event.transform); // Apply zoom transform to the main group
-                });
-             svg.call(zoom);
-
-
-            // --- Drawer Resizing Logic --- (Keep existing logic)
+            // Drawer Resizing Logic (Keep existing)
             const drawer = document.getElementById('code-display');
             const handle = document.getElementById('resize-handle');
             let isResizing = false;
